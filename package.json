@@ -1,0 +1,51 @@
+{
+  "name": "edmt-enat-mint-bot",
+  "version": "1.0.0",
+  "description": "EDMT/eNAT Mint a Block automation bot — Ethereum mainnet calldata-only minter",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src tests",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "scan": "node --loader ts-node/esm src/cli.ts scan",
+    "mint": "node --loader ts-node/esm src/cli.ts mint",
+    "resume": "node --loader ts-node/esm src/cli.ts resume",
+    "status": "node --loader ts-node/esm src/cli.ts status",
+    "pending": "node --loader ts-node/esm src/cli.ts pending",
+    "dry-run": "node --loader ts-node/esm src/cli.ts dry-run",
+    "monitor": "node --loader ts-node/esm src/cli.ts monitor",
+    "automint": "node --loader ts-node/esm src/cli.ts automint",
+    "highburn:scan": "node --loader ts-node/esm src/cli.ts highburn:scan",
+    "highburn:status": "node --loader ts-node/esm src/cli.ts highburn:status",
+    "highburn:mint": "node --loader ts-node/esm src/cli.ts highburn:mint",
+    "highburn:reset-cache": "node --loader ts-node/esm src/cli.ts highburn:reset-cache",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.2",
+    "pino": "^9.3.2",
+    "pino-pretty": "^11.2.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
+    "@typescript-eslint/parser": "^8.59.1",
+    "eslint": "^10.2.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "prettier": "^3.8.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.3",
+    "vitest": "^2.0.5"
+  }
+}

@@ -1,0 +1,29 @@
+# Environment — NEVER commit secrets
+.env
+.env.local
+.env.*.local
+
+# SQLite database — contains operational data
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite.backup_*
+
+# Lock / stop files
+automint.lock
+STOP_AUTOMINT
+
+# Build output
+dist/
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
