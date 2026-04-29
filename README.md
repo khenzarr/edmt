@@ -609,6 +609,37 @@ HIGH_BURN_ONLY_NO_FEE=true
 HIGH_BURN_USE_CACHE=true
 HIGH_BURN_CACHE_TTL_HOURS=168
 HIGH_BURN_UNKNOWN_RETRY_MINUTES=30
+HIGH_BURN_PENDING_API_BASE_URL=https://api.edmt.io/api/v1
+```
+
+### Fast High-Burn Acquisition
+
+Preferred path: import EDMT's pending/unminted queue into SQLite without historical
+RPC calls. The endpoint is ordered by burn, so the importer stops once it falls
+below `--min-eth`.
+
+```bash
+# Import currently unminted candidates with burn >= 1 ETH
+npm run highburn:import-pending -- --min-eth 1 --page-size 100
+
+# If you want to include smaller high-burn/dust candidates later
+npm run highburn:import-pending -- --min-eth 0.05 --page-size 100 --reset-cursor
+
+# Inspect the queue before minting
+npm run highburn:queue -- --min-eth 1 --limit 50
+
+# Mint from SQLite in burn-desc order; use dry-run first
+npm run highburn:catchup -- --min-eth 1 --limit 100 --dry-run
+npm run highburn:catchup -- --min-eth 1 --limit 100 --max-tx 3
+```
+
+Fallback path: if you still need a London-to-head historical RPC scan, use the
+resumable scanner. It checkpoints `highburn_rpc_scan_next_block` and sleeps on
+rate-limit errors.
+
+```bash
+npm run highburn:scan-resume -- --from 12965000 --min-eth 1 --chunk-size 1000 --concurrency 1
+npm run highburn:scan-resume -- --min-eth 1 --max-blocks 50000
 ```
 
 ### All HIGH_BURN_* Config Variables
@@ -631,6 +662,12 @@ HIGH_BURN_UNKNOWN_RETRY_MINUTES=30
 | `HIGH_BURN_SKIP_ALREADY_SEEN` | `true` | Skip submitted/finalized/minted_elsewhere blocks |
 | `HIGH_BURN_ON_EXHAUSTED` | `fallback_sequential` | Behavior when all tiers exhausted |
 | `HIGH_BURN_UNKNOWN_RETRY_MINUTES` | `30` | Retry interval for unknown-status candidates |
+| `HIGH_BURN_PENDING_API_BASE_URL` | `https://api.edmt.io/api/v1` | RPC-free pending candidate API base |
+| `HIGH_BURN_RPC_SCAN_CHUNK_SIZE` | `1000` | Resumable RPC scanner chunk size |
+| `HIGH_BURN_RPC_SCAN_CONCURRENCY` | `1` | Resumable RPC scanner concurrency |
+| `HIGH_BURN_RPC_SCAN_REQUEST_DELAY_MS` | `250` | Delay before each RPC block fetch |
+| `HIGH_BURN_RPC_SCAN_RATE_LIMIT_COOLDOWN_MS` | `300000` | Sleep after rate-limit errors |
+| `HIGH_BURN_RPC_SCAN_MAX_RETRIES` | `8` | Retries per block before recording an error |
 
 ### CLI Commands
 
@@ -638,8 +675,17 @@ HIGH_BURN_UNKNOWN_RETRY_MINUTES=30
 # Index blocks for high-burn candidates (no tx sent)
 npm run highburn:scan -- --from 12965000 --to 20000000 --min-eth 4
 
+# Import EDMT pending/unminted high-burn candidates without RPC scanning
+npm run highburn:import-pending -- --min-eth 1 --page-size 100
+
+# Resume a rate-limit-aware RPC scan
+npm run highburn:scan-resume -- --from 12965000 --min-eth 1
+
 # Show candidate stats by tier and status
 npm run highburn:status
+
+# Show top queued candidates
+npm run highburn:queue -- --min-eth 1 --limit 50
 
 # Start high burn mint session
 npm run highburn:mint

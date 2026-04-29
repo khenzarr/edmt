@@ -29,16 +29,29 @@ interface EndpointConfig {
   blockStatus: (blockNumber: number) => string;
   /** GET /api/v1/mints/recent — recent mints (supplementary only) */
   recentMints: string;
-  /** GET /api/v1/blocks/:blockNumber/fee — capture fee quote */
-  feeQuote: (blockNumber: number) => string;
+  /** GET /api/v1/mint/capture-fee?blk=:blockNumber — capture fee quote */
+  captureFee: (blockNumber: number) => string;
+  /** Legacy fee quote endpoint retained as a fallback. */
+  legacyFeeQuote: (blockNumber: number) => string;
 }
 
-function buildEndpoints(): EndpointConfig {
-  const base = config.edmtApiBaseUrl;
+function trimTrailingSlash(url: string): string {
+  return url.replace(/\/+$/, "");
+}
+
+function getApiBaseUrls(): string[] {
+  const configured = trimTrailingSlash(config.edmtApiBaseUrl);
+  const fallback = "https://api.edmt.io/api/v1";
+  return [...new Set([configured, fallback].map(trimTrailingSlash))];
+}
+
+function buildEndpoints(baseUrl = config.edmtApiBaseUrl): EndpointConfig {
+  const base = trimTrailingSlash(baseUrl);
   return {
     blockStatus: (n: number) => `${base}/blocks/${n}`,
     recentMints: `${base}/mints/recent`,
-    feeQuote: (n: number) => `${base}/blocks/${n}/fee`,
+    captureFee: (n: number) => `${base}/mint/capture-fee?blk=${n}`,
+    legacyFeeQuote: (n: number) => `${base}/blocks/${n}/fee`,
   };
 }
 
@@ -156,8 +169,6 @@ type EdmtBlockApiResponse = EdmtBlockApiResponseNew;
  *   - RPC fallback sets edmtStatusConfirmed=false → live mint blocked
  */
 export async function getBlockStatus(blockNumber: number): Promise<BlockResult> {
-  const endpoints = buildEndpoints();
-
   // -------------------------------------------------------------------------
   // Step 1: Pre-flight eligibility checks (no API call needed)
   // -------------------------------------------------------------------------
@@ -202,24 +213,35 @@ export async function getBlockStatus(blockNumber: number): Promise<BlockResult> 
   // -------------------------------------------------------------------------
   // Step 3: Try EDMT API block-specific endpoint (authoritative)
   // -------------------------------------------------------------------------
-  const apiUrl = endpoints.blockStatus(blockNumber);
-  logger.debug({ event: LogEvent.API_RETRY, url: apiUrl }, "Querying EDMT block-specific API");
+  let apiResult: { ok: boolean; status: number; data: unknown } = {
+    ok: false,
+    status: 0,
+    data: null,
+  };
+  let apiUrl = "";
 
-  const apiResult = await fetchWithRetry(apiUrl);
+  for (const baseUrl of getApiBaseUrls()) {
+    const endpoints = buildEndpoints(baseUrl);
+    apiUrl = endpoints.blockStatus(blockNumber);
+    logger.debug({ event: LogEvent.API_RETRY, url: apiUrl }, "Querying EDMT block-specific API");
 
-  if (apiResult.ok && apiResult.data) {
-    const parsed = parseEdmtBlockResponse(blockNumber, apiResult.data as EdmtBlockApiResponse);
-    if (parsed) {
-      logger.info(
-        {
-          event: LogEvent.BLOCK_DECISION,
-          block: blockNumber,
-          status: parsed.status,
-          source: "edmt_api",
-        },
-        `Block ${blockNumber} status from EDMT API: ${parsed.status}`
-      );
-      return { ...parsed, edmtStatusConfirmed: true };
+    apiResult = await fetchWithRetry(apiUrl);
+
+    if (apiResult.ok && apiResult.data) {
+      const parsed = parseEdmtBlockResponse(blockNumber, apiResult.data as EdmtBlockApiResponse);
+      if (parsed) {
+        logger.info(
+          {
+            event: LogEvent.BLOCK_DECISION,
+            block: blockNumber,
+            status: parsed.status,
+            source: "edmt_api",
+            apiBaseUrl: baseUrl,
+          },
+          `Block ${blockNumber} status from EDMT API: ${parsed.status}`
+        );
+        return { ...parsed, edmtStatusConfirmed: true };
+      }
     }
   }
 
@@ -333,10 +355,23 @@ export async function getBlockStatus(blockNumber: number): Promise<BlockResult> 
 export async function getFeeQuote(
   blockNumber: number
 ): Promise<{ feeRequired: boolean; requiredFeeGwei?: bigint } | undefined> {
-  const endpoints = buildEndpoints();
-  const url = endpoints.feeQuote(blockNumber);
+  const urls = getApiBaseUrls().flatMap((baseUrl) => {
+    const endpoints = buildEndpoints(baseUrl);
+    return [endpoints.captureFee(blockNumber), endpoints.legacyFeeQuote(blockNumber)];
+  });
 
-  const result = await fetchWithRetry(url);
+  let result: { ok: boolean; status: number; data: unknown } = {
+    ok: false,
+    status: 0,
+    data: null,
+  };
+  let url = "";
+
+  for (const candidateUrl of urls) {
+    url = candidateUrl;
+    result = await fetchWithRetry(url);
+    if (result.ok) break;
+  }
 
   if (!result.ok) {
     // Endpoint unavailable — cannot determine fee

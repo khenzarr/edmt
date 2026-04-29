@@ -24,6 +24,9 @@
     "highburn:mint": "node --loader ts-node/esm src/cli.ts highburn:mint",
     "highburn:reset-cache": "node --loader ts-node/esm src/cli.ts highburn:reset-cache",
     "reconcile": "node --loader ts-node/esm src/cli.ts reconcile",
+    "highburn:import-pending": "node --loader ts-node/esm scripts/highburn-import-pending.ts",
+    "highburn:scan-resume": "node --loader ts-node/esm scripts/highburn-scan-resume.ts",
+    "highburn:queue": "node --loader ts-node/esm scripts/highburn-queue.ts",
     "highburn:catchup": "node --loader ts-node/esm scripts/highburn-catchup.ts",
     "test": "vitest run",
     "test:watch": "vitest"

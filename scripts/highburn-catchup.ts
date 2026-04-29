@@ -31,6 +31,7 @@ import { buildMintPayload, encodePayload } from "../src/calldataBuilder.js";
 import { getFeeData, sendRawTransaction, getWallet, getPendingNonce } from "../src/ethClient.js";
 import {
   getDb,
+  hasPendingTx,
   hasReviewRequiredTx,
   isBlockSubmittedOrBeyond,
   getTxByBlock,
@@ -310,6 +311,15 @@ async function processCandidate(
     return {
       decision: "duplicate_skipped",
       reason: `existing_tx_${existingTx.tx_hash.slice(0, 10)}`,
+    };
+  }
+
+  // Non-pipeline mode must preserve the single-pending-tx safety gate.
+  if (!config.autoMintPipelineMode && !config.allowMultiplePendingTx && hasPendingTx()) {
+    report.pendingCapacitySkips++;
+    return {
+      decision: "pending_tx_skip",
+      reason: "pending_tx_exists_and_ALLOW_MULTIPLE_PENDING_TX=false",
     };
   }
 

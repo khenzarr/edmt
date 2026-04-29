@@ -131,7 +131,7 @@ export const config = {
 
   // EDMT API
   edmtBaseUrl: optionalEnv("EDMT_BASE_URL", "https://www.edmt.io"),
-  edmtApiBaseUrl: optionalEnv("EDMT_API_BASE_URL", "https://www.edmt.io/api/v1"),
+  edmtApiBaseUrl: optionalEnv("EDMT_API_BASE_URL", "https://api.edmt.io/api/v1"),
 
   // ---------------------------------------------------------------------------
   // Unattended Auto Mint
@@ -208,6 +208,20 @@ export const config = {
     optionalEnv("HIGH_BURN_ON_EXHAUSTED", "fallback_sequential")
   ),
   highBurnUnknownRetryMinutes: parseIntEnv("HIGH_BURN_UNKNOWN_RETRY_MINUTES", 30),
+
+  // High Burn historical candidate acquisition
+  highBurnPendingApiBaseUrl: optionalEnv(
+    "HIGH_BURN_PENDING_API_BASE_URL",
+    "https://api.edmt.io/api/v1"
+  ),
+  highBurnRpcScanChunkSize: parseIntEnv("HIGH_BURN_RPC_SCAN_CHUNK_SIZE", 1000),
+  highBurnRpcScanConcurrency: parseIntEnv("HIGH_BURN_RPC_SCAN_CONCURRENCY", 1),
+  highBurnRpcScanRequestDelayMs: parseIntEnv("HIGH_BURN_RPC_SCAN_REQUEST_DELAY_MS", 250),
+  highBurnRpcScanRateLimitCooldownMs: parseIntEnv(
+    "HIGH_BURN_RPC_SCAN_RATE_LIMIT_COOLDOWN_MS",
+    300_000
+  ),
+  highBurnRpcScanMaxRetries: parseIntEnv("HIGH_BURN_RPC_SCAN_MAX_RETRIES", 8),
 } as const;
 
 export type Config = typeof config;

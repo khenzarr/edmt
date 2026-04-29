@@ -26,6 +26,7 @@ import fs from "fs";
 
 const mockDb = {
   hasReviewRequiredTx: vi.fn().mockReturnValue(false),
+  hasPendingTx: vi.fn().mockReturnValue(false),
   isBlockSubmittedOrBeyond: vi.fn().mockReturnValue(false),
   getTxByBlock: vi.fn().mockReturnValue(undefined),
   insertTx: vi.fn(),

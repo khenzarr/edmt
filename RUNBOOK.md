@@ -423,22 +423,35 @@ UNATTENDED_AUTO_MINT=false
 
 ### Genel Bakış
 
-High Burn Priority Mode, blockları burn değerine göre önceliklendirerek yüksek burn'lü blockları önce mintler. Önce `highburn:scan` ile candidate'lar indexlenir, sonra `highburn:mint` veya `automint` ile mintlenir.
+High Burn Priority Mode, blockları burn değerine göre önceliklendirerek yüksek burn'lü blockları önce mintler. En ucuz yol `highburn:import-pending` ile EDMT'nin pending/unminted kuyruğunu SQLite'a almak; bu yol Alchemy historical RPC kullanmaz. Gerekirse `highburn:scan-resume` ile London'dan itibaren kontrollü RPC taraması yapılabilir.
 
 ### Adım 1 — Candidate Indexleme
 
 ```bash
-# Tüm EIP-1559 bloklarını 4 ETH minimum ile indexle
-npm run highburn:scan -- --from 12965000 --min-eth 4
+# Önerilen: EDMT pending/unminted kuyruğundan RPC'siz high-burn import
+npm run highburn:import-pending -- --min-eth 1 --page-size 100
 
-# Belirli bir aralığı indexle
-npm run highburn:scan -- --from 18000000 --to 20000000 --min-eth 4
+# Daha küçük adayları da eklemek istersen
+npm run highburn:import-pending -- --min-eth 0.05 --page-size 100 --reset-cursor
+
+# Fallback: London'dan itibaren rate-limit'e dayanıklı RPC taraması
+npm run highburn:scan-resume -- --from 12965000 --min-eth 1 --chunk-size 1000 --concurrency 1
+
+# Kısa deneme/tarama dilimi
+npm run highburn:scan-resume -- --min-eth 1 --max-blocks 50000
 ```
 
 Indexleme tamamlandıktan sonra durumu kontrol et:
 
 ```bash
 npm run highburn:status
+npm run highburn:queue -- --min-eth 1 --limit 50
+```
+
+DB'deki adayları mintlemeden önce dry-run:
+
+```bash
+npm run highburn:catchup -- --min-eth 1 --limit 100 --dry-run
 ```
 
 ### Adım 2 — Konfigürasyon
@@ -450,6 +463,11 @@ HIGH_BURN_ON_EXHAUSTED=fallback_sequential
 HIGH_BURN_ONLY_NO_FEE=true
 HIGH_BURN_USE_CACHE=true
 HIGH_BURN_UNKNOWN_RETRY_MINUTES=30
+HIGH_BURN_PENDING_API_BASE_URL=https://api.edmt.io/api/v1
+HIGH_BURN_RPC_SCAN_CHUNK_SIZE=1000
+HIGH_BURN_RPC_SCAN_CONCURRENCY=1
+HIGH_BURN_RPC_SCAN_REQUEST_DELAY_MS=250
+HIGH_BURN_RPC_SCAN_RATE_LIMIT_COOLDOWN_MS=300000
 UNATTENDED_AUTO_MINT=true
 DRY_RUN=false
 ENABLE_LIVE_MINT=true
