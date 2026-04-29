@@ -62,7 +62,8 @@ function createTables(db: Database.Database): void {
       nonce        INTEGER NOT NULL,
       gas_info     TEXT    NOT NULL,
       submitted_at TEXT    NOT NULL,
-      updated_at   TEXT    NOT NULL
+      updated_at   TEXT    NOT NULL,
+      reason       TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_txs_block
@@ -111,7 +112,34 @@ function createTables(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_hbc_updated_at
       ON high_burn_candidates (updated_at);
+
+    CREATE TABLE IF NOT EXISTS reconcile_events (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      block           INTEGER NOT NULL,
+      tx_hash         TEXT    NOT NULL,
+      previous_status TEXT    NOT NULL,
+      new_status      TEXT    NOT NULL,
+      decision        TEXT    NOT NULL,
+      reason          TEXT,
+      dry_run         INTEGER NOT NULL DEFAULT 0,
+      created_at      TEXT    NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_reconcile_events_block
+      ON reconcile_events (block);
+
+    CREATE INDEX IF NOT EXISTS idx_reconcile_events_tx_hash
+      ON reconcile_events (tx_hash);
   `);
+
+  // ---------------------------------------------------------------------------
+  // Migrations — add columns to existing tables if they don't exist
+  // ---------------------------------------------------------------------------
+  try {
+    db.exec(`ALTER TABLE txs ADD COLUMN reason TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -630,4 +658,94 @@ export function countHighBurnCandidatesByTier(tierEth: number): number {
     .prepare("SELECT COUNT(*) as cnt FROM high_burn_candidates WHERE tier_eth = ?")
     .get(tierEth) as { cnt: number };
   return row.cnt;
+}
+
+// ---------------------------------------------------------------------------
+// Review Required Reconciliation helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Get all transactions with status = 'review_required'.
+ * Returns full row data needed for reconciliation.
+ */
+export function getReviewRequiredTxs(): Array<{
+  id: number;
+  block: number;
+  tx_hash: string;
+  status: string;
+  reason: string | null;
+  updated_at: string;
+}> {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT id, block, tx_hash, status, reason, updated_at
+       FROM txs
+       WHERE status = 'review_required'
+       ORDER BY block ASC`
+    )
+    .all() as Array<{
+    id: number;
+    block: number;
+    tx_hash: string;
+    status: string;
+    reason: string | null;
+    updated_at: string;
+  }>;
+}
+
+/**
+ * Update tx status and reason together.
+ * Used by reconciler to record both the new status and the reason for the decision.
+ */
+export function updateTxStatusWithReason(txHash: string, status: string, reason: string): void {
+  const db = getDb();
+  db.prepare(`UPDATE txs SET status = ?, reason = ?, updated_at = ? WHERE tx_hash = ?`).run(
+    status,
+    reason,
+    new Date().toISOString(),
+    txHash
+  );
+}
+
+/**
+ * Get a block_results row by block number.
+ * Returns undefined if not found.
+ */
+export function getBlockResultByBlock(
+  block: number
+): { block: number; status: string; reason: string | null } | undefined {
+  const db = getDb();
+  return db
+    .prepare("SELECT block, status, reason FROM block_results WHERE block = ?")
+    .get(block) as { block: number; status: string; reason: string | null } | undefined;
+}
+
+/**
+ * Insert a reconcile event record for audit trail.
+ */
+export function insertReconcileEvent(params: {
+  block: number;
+  txHash: string;
+  previousStatus: string;
+  newStatus: string;
+  decision: string;
+  reason?: string;
+  dryRun: boolean;
+}): void {
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO reconcile_events
+       (block, tx_hash, previous_status, new_status, decision, reason, dry_run, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    params.block,
+    params.txHash,
+    params.previousStatus,
+    params.newStatus,
+    params.decision,
+    params.reason ?? null,
+    params.dryRun ? 1 : 0,
+    new Date().toISOString()
+  );
 }

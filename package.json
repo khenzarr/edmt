@@ -23,8 +23,21 @@
     "highburn:status": "node --loader ts-node/esm src/cli.ts highburn:status",
     "highburn:mint": "node --loader ts-node/esm src/cli.ts highburn:mint",
     "highburn:reset-cache": "node --loader ts-node/esm src/cli.ts highburn:reset-cache",
+    "reconcile": "node --loader ts-node/esm src/cli.ts reconcile",
+    "highburn:catchup": "node --loader ts-node/esm scripts/highburn-catchup.ts",
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node",
+    "compilerOptions": {
+      "rootDir": ".",
+      "moduleResolution": "bundler",
+      "noUnusedLocals": false,
+      "noUnusedParameters": false
+    },
+    "include": ["src/**/*", "scripts/**/*", "tests/**/*"]
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3",

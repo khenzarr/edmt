@@ -176,6 +176,13 @@ export const config = {
   ),
 
   // ---------------------------------------------------------------------------
+  // Review Required Reconciliation
+  // ---------------------------------------------------------------------------
+  autoReconcileReviewRequired: parseBoolEnv("AUTO_RECONCILE_REVIEW_REQUIRED", false),
+  reconcileRequireFinality: parseBoolEnv("RECONCILE_REQUIRE_FINALITY", true),
+  reconcileMinConfirmations: parseIntEnv("RECONCILE_MIN_CONFIRMATIONS", 64),
+
+  // ---------------------------------------------------------------------------
   // High Burn Priority Mode
   // ---------------------------------------------------------------------------
   highBurnPriorityMode: parseBoolEnv("HIGH_BURN_PRIORITY_MODE", false),

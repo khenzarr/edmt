@@ -558,6 +558,39 @@ export async function runAutoMint(): Promise<AutoMintReport> {
   }
 
   // -------------------------------------------------------------------------
+  // Auto-reconcile startup integration
+  // If AUTO_RECONCILE_REVIEW_REQUIRED=true and review_required records exist,
+  // attempt to reconcile them before starting the session.
+  // If any remain after reconcile, abort with review_required_detected.
+  // -------------------------------------------------------------------------
+  if (config.autoReconcileReviewRequired && hasReviewRequiredTx()) {
+    logger.info(
+      { event: LogEvent.RECONCILE_STARTED, sessionId },
+      "AutoMintRunner: review_required records found — attempting auto-reconcile before session start"
+    );
+    try {
+      const { reconcileAll } = await import("./reconciler.js");
+      const reconcileReport = await reconcileAll({ dryRun: false, fix: true });
+      logger.info(
+        {
+          event: LogEvent.RECONCILE_FINISHED,
+          sessionId,
+          total: reconcileReport.total,
+          finalized: reconcileReport.finalized,
+          failed: reconcileReport.failed,
+          leftReviewRequired: reconcileReport.leftReviewRequired,
+        },
+        `AutoMintRunner: auto-reconcile complete — ${reconcileReport.finalized} finalized, ${reconcileReport.leftReviewRequired} still review_required`
+      );
+    } catch (err) {
+      logger.warn(
+        { event: LogEvent.RECONCILE_FINISHED, sessionId, err: String(err) },
+        "AutoMintRunner: auto-reconcile threw an error — proceeding to review_required check"
+      );
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Graceful shutdown handler
   // -------------------------------------------------------------------------
   let shutdownRequested = false;

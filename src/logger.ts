@@ -100,6 +100,18 @@ export const LogEvent = {
   PIPELINE_NONCE_STATE_RECONCILED: "pipeline_nonce_state_reconciled",
   PIPELINE_NONCE_STATE_MISMATCH: "pipeline_nonce_state_mismatch",
 
+  // Review Required Reconciliation
+  RECONCILE_STARTED: "reconcile_started",
+  RECONCILE_CANDIDATE_FOUND: "reconcile_candidate_found",
+  RECONCILE_RECEIPT_MISSING: "reconcile_receipt_missing",
+  RECONCILE_RECEIPT_FAILED: "reconcile_receipt_failed",
+  RECONCILE_EDMT_VERIFIED: "reconcile_edmt_verified",
+  RECONCILE_OWNER_MISMATCH: "reconcile_owner_mismatch",
+  RECONCILE_TX_HASH_MISMATCH: "reconcile_tx_hash_mismatch",
+  RECONCILE_FINALIZED: "reconcile_finalized",
+  RECONCILE_LEFT_REVIEW_REQUIRED: "reconcile_left_review_required",
+  RECONCILE_FINISHED: "reconcile_finished",
+
   // High Burn Priority Mode
   HIGH_BURN_MODE_ENABLED: "high_burn_mode_enabled",
   HIGH_BURN_CANDIDATE_DISCOVERED: "high_burn_candidate_discovered",
