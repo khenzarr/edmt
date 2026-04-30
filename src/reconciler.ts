@@ -21,6 +21,7 @@ import { config } from "./config.js";
 import { logger, LogEvent } from "./logger.js";
 import {
   getReviewRequiredTxs,
+  getStuckTxByHash,
   updateTxStatusWithReason,
   upsertBlockResult,
   getBlockResultByBlock,
@@ -588,22 +589,23 @@ export async function resolveForceDropTx(
     };
   }
 
-  // Check 1: tx must be review_required (caller guarantees this, but verify)
-  if (tx.status !== "review_required") {
+  // Check 1: tx must be in a force-drop eligible status
+  const FORCE_DROP_ELIGIBLE_STATUSES = ["review_required", "pending", "included", "submitted"];
+  if (!FORCE_DROP_ELIGIBLE_STATUSES.includes(tx.status)) {
     logger.warn(
       {
         event: LogEvent.RECONCILE_FORCE_DROP_REJECTED,
         block,
         txHash,
-        reason: "not_review_required",
+        reason: "not_eligible_status",
         status: tx.status,
       },
-      `Reconciler: force-drop rejected — tx status is ${tx.status}, not review_required`
+      `Reconciler: force-drop rejected — tx status is ${tx.status}, not eligible for force-drop`
     );
     return {
       tx,
       decision: ReconcileDecision.LEAVE_REVIEW_REQUIRED,
-      reason: "force_drop_not_review_required",
+      reason: "force_drop_not_eligible_status",
       dryRun: opts.dryRun,
     };
   }
@@ -1188,6 +1190,14 @@ export async function reconcileAll(opts: ReconcileOpts): Promise<ReconcileReport
   }
   if (opts.txFilter !== undefined) {
     txs = txs.filter((tx) => tx.tx_hash.toLowerCase() === opts.txFilter!.toLowerCase());
+  }
+
+  // NEW: force-drop için pending/included/submitted tx de ekle
+  if (opts.forceDrop && opts.txFilter) {
+    const stuckTx = getStuckTxByHash(opts.txFilter);
+    if (stuckTx && !txs.some((t) => t.tx_hash.toLowerCase() === stuckTx.tx_hash.toLowerCase())) {
+      txs.push(stuckTx);
+    }
   }
 
   const report: ReconcileReport = {

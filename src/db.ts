@@ -776,6 +776,44 @@ export function getReviewRequiredTxs(): Array<{
 }
 
 /**
+ * Get a single tx by hash for pending/included/submitted statuses.
+ * Used by force-drop resolution to find stuck txs that are not in review_required.
+ * Returns undefined if not found or if status is not in ('pending', 'included', 'submitted').
+ */
+export function getStuckTxByHash(txHash: string):
+  | {
+      id: number;
+      block: number;
+      tx_hash: string;
+      status: string;
+      reason: string | null;
+      updated_at: string;
+      nonce: number;
+    }
+  | undefined {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT id, block, tx_hash, status, reason, updated_at, nonce
+       FROM txs
+       WHERE tx_hash = ?
+         AND status IN ('pending', 'included', 'submitted')
+       LIMIT 1`
+    )
+    .get(txHash) as
+    | {
+        id: number;
+        block: number;
+        tx_hash: string;
+        status: string;
+        reason: string | null;
+        updated_at: string;
+        nonce: number;
+      }
+    | undefined;
+}
+
+/**
  * Update tx status and reason together.
  * Used by reconciler to record both the new status and the reason for the decision.
  */
