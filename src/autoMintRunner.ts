@@ -24,7 +24,7 @@ import { logger, LogEvent } from "./logger.js";
 import { decideBlock } from "./blockScanner.js";
 import { execute, resetRunState } from "./mintExecutor.js";
 import { poll } from "./txMonitor.js";
-import { getWalletBalanceEth, getWallet, getPendingNonce } from "./ethClient.js";
+import { getWalletBalanceEth, getWallet, getPendingNonce, getLatestNonce } from "./ethClient.js";
 import {
   getDailyTxCount,
   hasPendingTx,
@@ -32,6 +32,7 @@ import {
   getUnfinalizedTxCount,
   hasReviewRequiredTx,
   hasFailedTx,
+  getMaxFinalizedNonce,
   updateHighBurnCandidateStatus,
 } from "./db.js";
 import { getCheckpoint, advanceScannedBlock, recordCheckpointError } from "./checkpoint.js";
@@ -716,8 +717,93 @@ export async function runAutoMint(): Promise<AutoMintReport> {
           );
           // If no more pending/included txs, we can exit
           if (!hasPendingTx()) {
-            stopReason = state.stopReason;
-            break;
+            if (state.stopReason === "nonce_anomaly_detected") {
+              // Attempt nonce reconcile before exiting
+              try {
+                const failedCount = hasFailedTx();
+                const reviewCount = hasReviewRequiredTx();
+                const pendingNonce = await getPendingNonce(walletAddress);
+                const latestNonce = await getLatestNonce(walletAddress);
+                const maxFinNonce = getMaxFinalizedNonce();
+
+                // Log diagnostic state before reconcile decision
+                const reconcileConditions = {
+                  activeTxCount: 0, // hasPendingTx()=false confirmed above
+                  failedCount,
+                  reviewRequiredCount: reviewCount,
+                  latestNonce,
+                  pendingNonce,
+                  maxFinalizedNonce: maxFinNonce,
+                  latestEqPending: latestNonce === pendingNonce,
+                  latestGteMaxFinPlusOne: latestNonce >= maxFinNonce + 1,
+                };
+
+                logger.info(
+                  {
+                    event: LogEvent.PIPELINE_NONCE_STATE_CHECK,
+                    sessionId,
+                    ...reconcileConditions,
+                  },
+                  "AutoMintRunner: nonce reconcile state check"
+                );
+
+                if (
+                  !failedCount &&
+                  !reviewCount &&
+                  latestNonce === pendingNonce &&
+                  latestNonce >= maxFinNonce + 1
+                ) {
+                  logger.info(
+                    {
+                      event: LogEvent.PIPELINE_NONCE_STATE_RECONCILED,
+                      sessionId,
+                      latestNonce,
+                      pendingNonce,
+                      maxFinNonce,
+                    },
+                    "pipeline nonce state reconciled — resuming scan/send loop"
+                  );
+                  state.stopNewTx = false;
+                  state.stopReason = "completed";
+                  lastSubmittedNonce = pendingNonce - 1;
+                  continue;
+                } else {
+                  // Determine which condition(s) failed for clear diagnostics
+                  const failReasons: string[] = [];
+                  if (failedCount) failReasons.push("failedCount>0");
+                  if (reviewCount) failReasons.push("reviewRequiredCount>0");
+                  if (latestNonce !== pendingNonce)
+                    failReasons.push(`latestNonce(${latestNonce})!=pendingNonce(${pendingNonce})`);
+                  if (latestNonce < maxFinNonce + 1)
+                    failReasons.push(
+                      `latestNonce(${latestNonce})<maxFinalizedNonce+1(${maxFinNonce + 1})`
+                    );
+
+                  logger.error(
+                    {
+                      event: LogEvent.PIPELINE_NONCE_STATE_UNRECOVERABLE,
+                      sessionId,
+                      failReasons,
+                      ...reconcileConditions,
+                    },
+                    `AutoMintRunner: nonce anomaly unrecoverable — ${failReasons.join(", ")} — closing session`
+                  );
+                  stopReason = "nonce_anomaly_detected";
+                  break;
+                }
+              } catch (err) {
+                logger.error(
+                  { event: LogEvent.RPC_ERROR, sessionId, err },
+                  "nonce reconcile RPC error — closing session"
+                );
+                stopReason = "nonce_anomaly_detected";
+                break;
+              }
+            } else {
+              // Other stopReason values — preserve existing behavior
+              stopReason = state.stopReason;
+              break;
+            }
           }
           await sleep(config.autoMintReconcileIntervalMs);
           continue;

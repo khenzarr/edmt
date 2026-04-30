@@ -18,7 +18,13 @@ export type BlockStatus =
 // Transaction lifecycle status
 // ---------------------------------------------------------------------------
 
-export type TxStatus = "pending" | "included" | "failed" | "finalized" | "review_required";
+export type TxStatus =
+  | "pending"
+  | "included"
+  | "failed"
+  | "finalized"
+  | "review_required"
+  | "dropped";
 
 // ---------------------------------------------------------------------------
 // Block lifecycle (extended, used in block_results table)
@@ -35,7 +41,8 @@ export type BlockLifecycleStatus =
   | "finalized"
   | "successful_mint"
   | "review_required"
-  | "failed";
+  | "failed"
+  | "retryable";
 
 // ---------------------------------------------------------------------------
 // Beyond-head behaviour enum

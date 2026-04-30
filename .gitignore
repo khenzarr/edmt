@@ -27,3 +27,12 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+.env
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+automint.lock
+STOP_AUTOMINT
+node_modules/
+logs/

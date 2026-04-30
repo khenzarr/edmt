@@ -99,6 +99,21 @@ export const LogEvent = {
   PIPELINE_NONCE_STATE_CHECK: "pipeline_nonce_state_check",
   PIPELINE_NONCE_STATE_RECONCILED: "pipeline_nonce_state_reconciled",
   PIPELINE_NONCE_STATE_MISMATCH: "pipeline_nonce_state_mismatch",
+  PIPELINE_NONCE_STATE_UNRECOVERABLE: "pipeline_nonce_state_unrecoverable",
+  PIPELINE_NONCE_STATE_RECONCILE_SKIPPED: "pipeline_nonce_state_reconcile_skipped",
+
+  // Dropped TX Resolution
+  RECONCILE_DROPPED_DETECTED: "reconcile_dropped_detected",
+  RECONCILE_DROPPED_RETRYABLE: "reconcile_dropped_retryable",
+  RECONCILE_DROPPED_MINTED: "reconcile_dropped_minted",
+  RECONCILE_TX_STILL_PENDING: "reconcile_tx_still_pending",
+  RECONCILE_NONCE_NOT_ADVANCED: "reconcile_nonce_not_advanced",
+
+  // Force Drop Resolution
+  RECONCILE_FORCE_DROP_REQUESTED: "reconcile_force_drop_requested",
+  RECONCILE_FORCE_DROP_ELIGIBLE: "reconcile_force_drop_eligible",
+  RECONCILE_FORCE_DROP_REJECTED: "reconcile_force_drop_rejected",
+  RECONCILE_FORCE_DROP_APPLIED: "reconcile_force_drop_applied",
 
   // Review Required Reconciliation
   RECONCILE_STARTED: "reconcile_started",

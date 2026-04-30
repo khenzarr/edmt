@@ -461,74 +461,115 @@ program
   )
   .option("--dry-run", "Show what would be done without writing to DB (default)")
   .option("--fix", "Apply DB updates (promote confirmed records to finalized/successful_mint)")
+  .option("--fix-dropped", "Attempt dropped/replaced tx resolution for receipt_missing records")
+  .option(
+    "--force-drop",
+    "Force-drop a stuck review_required tx where nonce has not advanced. Requires --tx or --block filter. All 11 safety checks must pass. Dry-run by default; add --fix-dropped to apply."
+  )
   .option("--block <n>", "Only reconcile records for a specific block number")
   .option("--tx <hash>", "Only reconcile a specific tx hash")
-  .action(async (opts: { dryRun?: boolean; fix?: boolean; block?: string; tx?: string }) => {
-    // --fix and --dry-run are mutually exclusive; dry-run is the default
-    const isDryRun = !opts.fix;
+  .action(
+    async (opts: {
+      dryRun?: boolean;
+      fix?: boolean;
+      fixDropped?: boolean;
+      forceDrop?: boolean;
+      block?: string;
+      tx?: string;
+    }) => {
+      // --fix and --dry-run are mutually exclusive; dry-run is the default
+      const isDryRun = !opts.fix;
 
-    const blockFilter = opts.block !== undefined ? parseInt(opts.block, 10) : undefined;
-    if (opts.block !== undefined && (isNaN(blockFilter!) || blockFilter! <= 0)) {
-      console.error("Error: --block must be a positive integer");
-      process.exit(1);
-    }
+      // --force-drop requires --tx or --block filter for safety
+      if (opts.forceDrop && opts.tx === undefined && opts.block === undefined) {
+        console.error(
+          "Error: --force-drop requires --tx <hash> or --block <n> filter for safety.\n" +
+            "Example: npm run reconcile -- --force-drop --tx 0xabc...\n" +
+            "         npm run reconcile -- --force-drop --block 12345678"
+        );
+        process.exit(1);
+      }
 
-    initDb();
+      const blockFilter = opts.block !== undefined ? parseInt(opts.block, 10) : undefined;
+      if (opts.block !== undefined && (isNaN(blockFilter!) || blockFilter! <= 0)) {
+        console.error("Error: --block must be a positive integer");
+        process.exit(1);
+      }
 
-    const { reconcileAll } = await import("./reconciler.js");
+      initDb();
 
-    console.log(
-      `\n=== Reconcile Review Required ${isDryRun ? "[DRY-RUN — no DB changes]" : "[FIX MODE — DB will be updated]"} ===`
-    );
+      const { reconcileAll } = await import("./reconciler.js");
 
-    if (blockFilter !== undefined) {
-      console.log(`  Filter: block ${blockFilter}`);
-    }
-    if (opts.tx !== undefined) {
-      console.log(`  Filter: tx ${opts.tx}`);
-    }
+      console.log(
+        `\n=== Reconcile Review Required ${isDryRun ? "[DRY-RUN — no DB changes]" : "[FIX MODE — DB will be updated]"} ===`
+      );
 
-    const report = await reconcileAll({
-      dryRun: isDryRun,
-      fix: !isDryRun,
-      blockFilter,
-      txFilter: opts.tx,
-    });
+      if (blockFilter !== undefined) {
+        console.log(`  Filter: block ${blockFilter}`);
+      }
+      if (opts.tx !== undefined) {
+        console.log(`  Filter: tx ${opts.tx}`);
+      }
+      if (opts.forceDrop) {
+        console.log(`  Mode:   FORCE-DROP (explicit override — all 11 safety checks enforced)`);
+      }
 
-    console.log(`\nReconcile complete:`);
-    console.log(`  Total candidates:    ${report.total}`);
-    console.log(`  Finalized:           ${report.finalized}`);
-    console.log(`  Failed:              ${report.failed}`);
-    console.log(`  Left review_required: ${report.leftReviewRequired}`);
-    console.log(
-      `  Mode:                ${isDryRun ? "DRY-RUN (no changes written)" : "FIX (DB updated)"}`
-    );
+      const report = await reconcileAll({
+        dryRun: isDryRun,
+        fix: !isDryRun,
+        blockFilter,
+        txFilter: opts.tx,
+        fixDropped: opts.fixDropped ?? false,
+        forceDrop: opts.forceDrop ?? false,
+      });
 
-    if (report.results.length > 0) {
-      console.log(`\nDetails:`);
-      for (const r of report.results) {
-        const icon =
-          r.decision === "MARK_FINALIZED" ? "✅" : r.decision === "MARK_FAILED" ? "❌" : "⏳";
+      console.log(`\nReconcile complete:`);
+      console.log(`  Total candidates:    ${report.total}`);
+      console.log(`  Finalized:           ${report.finalized}`);
+      console.log(`  Failed:              ${report.failed}`);
+      console.log(`  Dropped:             ${report.dropped}`);
+      console.log(`  Retryable:           ${report.retryable}`);
+      console.log(`  Left review_required: ${report.leftReviewRequired}`);
+      console.log(
+        `  Mode:                ${isDryRun ? "DRY-RUN (no changes written)" : "FIX (DB updated)"}`
+      );
+
+      if (report.results.length > 0) {
+        console.log(`\nDetails:`);
+        for (const r of report.results) {
+          const icon =
+            r.decision === "MARK_FINALIZED"
+              ? "✅"
+              : r.decision === "MARK_FAILED"
+                ? "❌"
+                : r.decision === "MARK_DROPPED_RETRYABLE"
+                  ? r.reason.startsWith("force_dropped_")
+                    ? "⚡"
+                    : "🔄"
+                  : r.decision === "MARK_DROPPED_MINTED"
+                    ? "🏁"
+                    : "⏳";
+          console.log(
+            `  ${icon} Block ${r.tx.block} | ${r.tx.tx_hash} | ${r.decision} | reason: ${r.reason}`
+          );
+        }
+      }
+
+      if (isDryRun && report.finalized > 0) {
         console.log(
-          `  ${icon} Block ${r.tx.block} | ${r.tx.tx_hash} | ${r.decision} | reason: ${r.reason}`
+          `\n💡 ${report.finalized} record(s) can be promoted. Run with --fix to apply changes.`
         );
       }
-    }
 
-    if (isDryRun && report.finalized > 0) {
-      console.log(
-        `\n💡 ${report.finalized} record(s) can be promoted. Run with --fix to apply changes.`
-      );
-    }
+      if (report.leftReviewRequired > 0) {
+        console.log(
+          `\n⚠️  ${report.leftReviewRequired} record(s) remain review_required — automint will not start until resolved.`
+        );
+      }
 
-    if (report.leftReviewRequired > 0) {
-      console.log(
-        `\n⚠️  ${report.leftReviewRequired} record(s) remain review_required — automint will not start until resolved.`
-      );
+      closeDb();
     }
-
-    closeDb();
-  });
+  );
 
 // ---------------------------------------------------------------------------
 // Parse and run

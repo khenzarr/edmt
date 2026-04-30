@@ -443,8 +443,87 @@ export function hasFailedTx(): boolean {
   return row.cnt > 0;
 }
 
+/**
+ * Get the maximum nonce among finalized transactions.
+ * Returns 0 when no finalized txs exist (safe default — latestNonce >= 0+1 passes for nonce=1+).
+ * Used by pipeline mode nonce reconcile check.
+ */
+export function getMaxFinalizedNonce(): number {
+  const db = getDb();
+  const row = db
+    .prepare("SELECT MAX(nonce) as max_nonce FROM txs WHERE status = 'finalized'")
+    .get() as { max_nonce: number | null };
+  return row.max_nonce ?? 0;
+}
+
 // ---------------------------------------------------------------------------
 // High Burn Priority Mode helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Mark a tx as dropped with a reason.
+ * Used by dropped tx resolution in reconciler.
+ */
+export function markTxDropped(txHash: string, reason: string): void {
+  const db = getDb();
+  db.prepare(`UPDATE txs SET status = 'dropped', reason = ?, updated_at = ? WHERE tx_hash = ?`).run(
+    reason,
+    new Date().toISOString(),
+    txHash
+  );
+}
+
+/**
+ * Mark a block_results row as retryable.
+ * Used by dropped tx resolution when block is still mintable.
+ */
+export function markBlockRetryable(block: number, reason: string): void {
+  const db = getDb();
+  db.prepare(
+    `UPDATE block_results SET status = 'retryable', reason = ?, updated_at = ? WHERE block = ?`
+  ).run(reason, new Date().toISOString(), block);
+}
+
+/**
+ * Find txs by nonce value.
+ * Used by dropped tx resolution to check if nonce was reused.
+ */
+export function findTxsByNonce(
+  nonce: number
+): Array<{ tx_hash: string; status: string; block: number }> {
+  const db = getDb();
+  return db
+    .prepare("SELECT tx_hash, status, block FROM txs WHERE nonce = ? ORDER BY id ASC")
+    .all(nonce) as Array<{ tx_hash: string; status: string; block: number }>;
+}
+
+/**
+ * Find txs by block number.
+ * Used by dropped tx resolution to check if block has other txs.
+ */
+export function findTxsByBlock(
+  block: number
+): Array<{ tx_hash: string; status: string; nonce: number }> {
+  const db = getDb();
+  return db
+    .prepare("SELECT tx_hash, status, nonce FROM txs WHERE block = ? ORDER BY id ASC")
+    .all(block) as Array<{ tx_hash: string; status: string; nonce: number }>;
+}
+
+/**
+ * Count dropped transactions.
+ * Used by reconciler report.
+ */
+export function getDroppedTxCount(): number {
+  const db = getDb();
+  const row = db.prepare("SELECT COUNT(*) as cnt FROM txs WHERE status = 'dropped'").get() as {
+    cnt: number;
+  };
+  return row.cnt;
+}
+
+// ---------------------------------------------------------------------------
+// High Burn Priority Mode helpers (continued)
 // ---------------------------------------------------------------------------
 
 /**
@@ -675,11 +754,12 @@ export function getReviewRequiredTxs(): Array<{
   status: string;
   reason: string | null;
   updated_at: string;
+  nonce: number;
 }> {
   const db = getDb();
   return db
     .prepare(
-      `SELECT id, block, tx_hash, status, reason, updated_at
+      `SELECT id, block, tx_hash, status, reason, updated_at, nonce
        FROM txs
        WHERE status = 'review_required'
        ORDER BY block ASC`
@@ -691,6 +771,7 @@ export function getReviewRequiredTxs(): Array<{
     status: string;
     reason: string | null;
     updated_at: string;
+    nonce: number;
   }>;
 }
 

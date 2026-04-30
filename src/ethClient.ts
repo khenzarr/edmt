@@ -128,6 +128,30 @@ export async function getPendingNonce(address: string): Promise<number> {
   );
 }
 
+/**
+ * Get the latest (confirmed) nonce for an address.
+ * Uses provider.getTransactionCount(address, "latest").
+ * Used by pipeline mode nonce reconcile check.
+ */
+export async function getLatestNonce(address: string): Promise<number> {
+  return withRetry(
+    () => getProvider().getTransactionCount(address, "latest"),
+    `getLatestNonce(${address.slice(0, 10)}...)`
+  );
+}
+
+/**
+ * Get a transaction by hash. Returns null if not found (dropped/replaced).
+ * Uses provider.getTransaction(txHash).
+ * Used by dropped tx detection in reconciler.
+ */
+export async function getTransaction(txHash: string): Promise<ethers.TransactionResponse | null> {
+  return withRetry(
+    () => getProvider().getTransaction(txHash),
+    `getTransaction(${txHash.slice(0, 10)}...)`
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Burn calculation
 // ---------------------------------------------------------------------------
