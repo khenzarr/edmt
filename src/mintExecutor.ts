@@ -196,8 +196,9 @@ export async function execute(
     };
   }
 
+  const ACTIVE_TX_STATUSES = ["pending", "submitted", "included", "finalized", "successful_mint"];
   const existingTx = getTxByBlock(block);
-  if (existingTx) {
+  if (existingTx && ACTIVE_TX_STATUSES.includes(existingTx.status)) {
     logger.warn(
       {
         event: LogEvent.MINT_GATE_FAILED,
@@ -214,6 +215,7 @@ export async function execute(
       reason: `Existing tx ${existingTx.tx_hash} (${existingTx.status}) for block ${block}`,
     };
   }
+  // dropped/failed → fall through, allow new mint attempt
 
   // -------------------------------------------------------------------------
   // Gate 10: Pending tx check (bypassed in pipeline mode — nonce managed by AutoMintRunner)
